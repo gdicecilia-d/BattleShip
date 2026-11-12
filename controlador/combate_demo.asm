@@ -1,20 +1,12 @@
-# ==============================================================================
-# CONTROLADOR (PRUEBA AUTONOMA DE ATAQUE): combate_demo.asm
-# Descripcion:
-#   Bucle de prueba autonoma para verificar el cursor de ataque y la activacion
-#   de ambos comodines (Radar 5% y Area 3x3 1/7). Al integrarse con Integrante 3,
-#   este archivo sirve de plantilla o se sustituye por el motor de turnos final.
-# ==============================================================================
+# Ciclo de ataque por turnos y resolucion de disparos
 
 .text
 .globl ejecutar_demo_ataque
 .globl procesar_disparo_simple
 
-# ------------------------------------------------------------------------------
-# SUBRUTINA: ejecutar_demo_ataque
-#   Ejecuta turnos de ataque del jugador hasta hundir la flota enemiga demo.
-# Argumentos: Ninguno. (Preserva $ra y $s0-$s2 en $sp).
-# ------------------------------------------------------------------------------
+# ejecutar_demo_ataque()
+# Bucle principal de ataque hasta hundir toda la flota enemiga
+# Preserva $ra y $s0-$s2 en la pila
 ejecutar_demo_ataque:
     addi $sp, $sp, -16
     sw   $ra, 12($sp)
@@ -26,17 +18,15 @@ ejecutar_demo_ataque:
     la   $a0, msg_fase_atk
     syscall
 
-    li   $s0, 0                     # $s0 = cursor X inicial (0..15)
-    li   $s1, 0                     # $s1 = cursor Y inicial (0..15)
+    li   $s0, 0                     # Cursor X inicial
+    li   $s1, 0                     # Cursor Y inicial
 
 eda_bucle:
-    # 1. Inicio de turno: intentar comodin Radar (5%)
     la   $a0, tablero_enemigo
     la   $a1, tablero_ataque
     jal  intentar_comodin_radar
-    move $s2, $v1                   # $s2 = indice revelado (-1 si no activo)
+    move $s2, $v1                   # Guardar indice revelado (-1 si inactivo)
 
-    # 2. Controlador/Vista: apuntar con cursor amarillo y confirmar disparo
     move $a0, $s0
     move $a1, $s1
     la   $a2, tablero_ataque
@@ -45,7 +35,6 @@ eda_bucle:
     move $s0, $v0
     move $s1, $v1
 
-    # 3. Al confirmar disparo: intentar comodin Ataque 3x3 (1 en 7)
     move $a0, $s0
     move $a1, $s1
     la   $a2, tablero_enemigo
@@ -53,7 +42,6 @@ eda_bucle:
     jal  intentar_comodin_area
     bnez $v0, eda_fin_turno
 
-    # 4. Disparo normal de 1 casilla si no salio el comodin 3x3
     move $a0, $s0
     move $a1, $s1
     la   $a2, tablero_enemigo
@@ -61,13 +49,11 @@ eda_bucle:
     jal  procesar_disparo_simple
 
 eda_fin_turno:
-    # Limpiar destello temporal del radar al cerrar el turno
     la   $a0, tablero_ataque
     li   $a1, Y_ATK_MIN
-    li   $a2, -1
+    li   $a2, -1                    # Ocultar pista temporal del radar al cerrar turno
     jal  dibujar_tablero_base
 
-    # Verificar en Modelo si quedan casillas enemigas intactas
     la   $a0, tablero_enemigo
     jal  contar_barcos_restantes
     bgtz $v0, eda_bucle
@@ -84,11 +70,8 @@ eda_fin_turno:
     jr   $ra
 
 
-# ------------------------------------------------------------------------------
-# SUBRUTINA: procesar_disparo_simple
-#   Resuelve disparo unitario en (X, Y) actualizando Modelo y Vista.
-# Argumentos: $a0=X, $a1=Y, $a2=tablero_enemigo, $a3=tablero_ataque
-# ------------------------------------------------------------------------------
+# procesar_disparo_simple($a0=X, $a1=Y, $a2=tablero_enemigo, $a3=tablero_ataque)
+# Ejecuta un disparo de una sola casilla y actualiza matriz y pantalla
 procesar_disparo_simple:
     addi $sp, $sp, -20
     sw   $ra, 16($sp)
@@ -103,7 +86,7 @@ procesar_disparo_simple:
     move $s3, $a3
 
     sll  $t0, $s1, 4
-    add  $t0, $t0, $s0              # idx = (Y << 4) + X
+    add  $t0, $t0, $s0              # idx = (Y * 16) + X
 
     add  $t1, $s3, $t0
     lbu  $t2, 0($t1)

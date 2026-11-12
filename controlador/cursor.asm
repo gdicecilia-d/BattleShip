@@ -1,37 +1,22 @@
-# ==============================================================================
-# CONTROLADOR (NAVEGACION): cursor.asm
-# Descripcion:
-#   Subrutinas reutilizables de movimiento del cursor por teclado (WASD) para
-#   la zona de defensa (Y=16..31) y la zona de ataque (Y=0..15).
-# ==============================================================================
+# Subrutinas de movimiento del cursor en tablero de defensa y ataque
 
 .text
 .globl mover_cursor
 .globl mover_cursor_ataque
 
-# ------------------------------------------------------------------------------
-# SUBRUTINA: mover_cursor (Hoja)
-#   Desplaza (X, Y) un paso segun WASD dentro de [0, x_max] x [y_min, y_max].
-# Argumentos:
-#   $a0 = X actual
-#   $a1 = Y actual
-#   $a2 = Tecla ASCII ('W'/'w', 'S'/'s', 'A'/'a', 'D'/'d')
-#   $a3 = Limites empaquetados: (x_max << 16) | (y_min << 8) | y_max
-# Retorno:
-#   $v0 = Nueva coordenada X
-#   $v1 = Nueva coordenada Y
-# ------------------------------------------------------------------------------
+# mover_cursor($a0=X, $a1=Y, $a2=tecla, $a3=limites) -> ($v0=new_X, $v1=new_Y)
+# Limites empaquetados en $a3: (x_max << 16) | (y_min << 8) | y_max
 mover_cursor:
-    andi $t0, $a3, 0xFF             # $t0 = y_max
+    andi $t0, $a3, 0xFF             # y_max
     srl  $t1, $a3, 8
-    andi $t1, $t1, 0xFF             # $t1 = y_min
+    andi $t1, $t1, 0xFF             # y_min
     srl  $t2, $a3, 16
-    andi $t2, $t2, 0xFF             # $t2 = x_max
+    andi $t2, $t2, 0xFF             # x_max
 
     move $v0, $a0
     move $v1, $a1
 
-    # Normalizar tecla en $t3 si viene en minuscula ('a'..'z')
+    # Normalizar tecla a mayuscula si es minuscula ('a'..'z')
     move $t3, $a2
     li   $t4, 97
     blt  $t3, $t4, mc_evaluar
@@ -44,9 +29,9 @@ mc_evaluar:
     beq  $t3, $t4, mc_arriba
     li   $t4, TECLA_S               # Abajo  (Y + 1)
     beq  $t3, $t4, mc_abajo
-    li   $t4, TECLA_A               # Izq.   (X - 1)
+    li   $t4, TECLA_A               # Izquierda (X - 1)
     beq  $t3, $t4, mc_izquierda
-    li   $t4, TECLA_D               # Der.   (X + 1)
+    li   $t4, TECLA_D               # Derecha   (X + 1)
     beq  $t3, $t4, mc_derecha
     j    mc_fin
 
@@ -73,19 +58,9 @@ mc_fin:
     jr   $ra
 
 
-# ------------------------------------------------------------------------------
-# SUBRUTINA: mover_cursor_ataque
-#   Bucle interactivo de apuntado en el tablero superior (Y=0..15). Redibuja
-#   tablero_ataque + cursor amarillo (0xFFFF00) hasta confirmar con E o Enter.
-# Argumentos:
-#   $a0 = X inicial (0..15)
-#   $a1 = Y inicial (0..15)
-#   $a2 = Direccion base de tablero_ataque (256 bytes)
-#   $a3 = Indice lineal de radar temporal (0..255), o -1 si inactivo
-# Retorno:
-#   $v0 = X confirmada (0..15)
-#   $v1 = Y confirmada (0..15)
-# ------------------------------------------------------------------------------
+# mover_cursor_ataque($a0=X_ini, $a1=Y_ini, $a2=tablero_ataque, $a3=radar_idx)
+# Bucle interactivo de seleccion de objetivo en la mitad superior (Y=0..15)
+# Retorna: $v0 = X confirmada, $v1 = Y confirmada. Preserva $ra y $s0-$s3
 mover_cursor_ataque:
     addi $sp, $sp, -20
     sw   $ra, 16($sp)
@@ -94,12 +69,12 @@ mover_cursor_ataque:
     sw   $s1, 4($sp)
     sw   $s0, 0($sp)
 
-    move $s0, $a0                   # $s0 = X
-    move $s1, $a1                   # $s1 = Y
-    move $s2, $a2                   # $s2 = base tablero_ataque
-    move $s3, $a3                   # $s3 = radar_idx
+    move $s0, $a0                   # X actual
+    move $s1, $a1                   # Y actual
+    move $s2, $a2                   # Base tablero_ataque
+    move $s3, $a3                   # Indice de radar (-1 si inactivo)
 
-    # Garantizar posicion inicial dentro de [0..15] x [0..15]
+    # Asegurar coordenadas iniciales en [0..15] x [0..15]
     bltz $s0, mca_clamp_x0
     li   $t0, 15
     ble  $s0, $t0, mca_check_y
@@ -118,19 +93,16 @@ mca_clamp_y0:
     li   $s1, 0
 
 mca_bucle:
-    # Redibujar Vista superior desde el Modelo (+ posible pista del radar)
     move $a0, $s2
     li   $a1, Y_ATK_MIN             # Offset Y = 0
     move $a2, $s3
     jal  dibujar_tablero_base
 
-    # Superponer cursor amarillo
     move $a0, $s0
     move $a1, $s1
-    li   $a2, COLOR_CURSOR
+    li   $a2, COLOR_CURSOR          # Pintar cursor amarillo en (X, Y)
     jal  dibujar_celda
 
-    # Mostrar prompt en consola
     li   $v0, 4
     la   $a0, msg_atk_prompt
     syscall
@@ -147,7 +119,7 @@ mca_bucle:
     beq  $v0, $t0, mca_confirmar
     li   $t0, TECLA_ENTER
     beq  $v0, $t0, mca_confirmar
-    li   $t0, TECLA_R               # Ignorar R durante fase de ataque
+    li   $t0, TECLA_R               # Ignorar rotacion en fase de ataque
     beq  $v0, $t0, mca_bucle
 
     move $a0, $s0

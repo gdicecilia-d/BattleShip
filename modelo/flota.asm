@@ -1,12 +1,7 @@
-# ==============================================================================
-# MODELO (DATOS DE FLOTA): flota.asm
-# Descripcion:
-#   Define la composicion oficial de los 4 barcos de la flota y enlaza sus
-#   nombres descriptivos para la fase de colocacion manual.
-# ==============================================================================
+# Configuracion de los 4 barcos de la flota (longitudes y nombres)
 
 .data
-.align 2                            # Alineacion obligatoria antes de directivas .word
+.align 2                            # Alineacion obligatoria antes de .word
 .globl longitudes_flota
 longitudes_flota:   .word 5, 4, 3, 2
 

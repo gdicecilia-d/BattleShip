@@ -1,19 +1,12 @@
-# ==============================================================================
-# CONTROLADOR (COLOCACION): colocacion_flota.asm
-# Descripcion:
-#   Orquesta el despliegue manual secuencial de los 4 barcos (5, 4, 3, 2) en
-#   la zona de defensa (Y=16..31), conectando teclado/cursor (Controlador),
-#   validacion de limites/colisiones (Modelo) y preview amarillo (Vista).
-# ==============================================================================
+# Colocacion manual de la flota de 4 barcos (5, 4, 3, 2) en zona de defensa
 
 .text
 .globl colocar_flota_manual
 
-# ------------------------------------------------------------------------------
-# SUBRUTINA: colocar_flota_manual
-# Argumentos: Ninguno (opera sobre tablero_defensa global).
-# Retorno:    Ninguno. (Preserva $ra y $s0-$s6 en $sp).
-# ------------------------------------------------------------------------------
+# colocar_flota_manual()
+# Permite mover (WASD), rotar (R) y confirmar (E/Enter) cada barco con
+# preview en amarillo y validacion contra tablero_defensa (Y=16..31)
+# Preserva $ra y $s0-$s6 en la pila
 colocar_flota_manual:
     addi $sp, $sp, -32
     sw   $ra, 28($sp)
@@ -25,7 +18,7 @@ colocar_flota_manual:
     sw   $s1, 4($sp)
     sw   $s0, 0($sp)
 
-    la   $s0, tablero_defensa       # $s0 = base tablero_defensa
+    la   $s0, tablero_defensa       # Base matriz de defensa
     move $a0, $s0
     jal  limpiar_matriz_256
 
@@ -33,31 +26,29 @@ colocar_flota_manual:
     la   $a0, msg_fase_def
     syscall
 
-    li   $s1, 0                     # $s1 = ship_idx (0..3)
+    li   $s1, 0                     # Indice de barco (0..3)
 
 cfm_loop_barcos:
     li   $t0, 4
     bge  $s1, $t0, cfm_flota_ok
 
-    # Obtener longitud y nombre desde Modelo
-    sll  $t0, $s1, 2
+    sll  $t0, $s1, 2                # ship_idx * 4 bytes
     la   $t1, longitudes_flota
     add  $t1, $t1, $t0
-    lw   $s2, 0($t1)                # $s2 = longitud (5, 4, 3 o 2)
+    lw   $s2, 0($t1)                # Longitud actual (5, 4, 3 o 2)
 
     la   $t1, nombres_flota
     add  $t1, $t1, $t0
-    lw   $s6, 0($t1)                # $s6 = nombre del barco
+    lw   $s6, 0($t1)                # Nombre actual
 
-    # Posicion inicial para el barco actual
-    li   $s3, 0                     # $s3 = X (0..15)
-    li   $s4, Y_DEF_MIN             # $s4 = Y (16..31)
-    li   $s5, ORIENT_HORIZ          # $s5 = 0 Horizontal
+    li   $s3, 0                     # X inicial
+    li   $s4, Y_DEF_MIN             # Y inicial (16)
+    li   $s5, ORIENT_HORIZ          # Orientacion inicial (0 = Horizontal)
 
 cfm_loop_preview:
-    # 1. Vista: redibujar tablero de defensa logico y superponer preview amarillo
+    # Redibujar barcos ya colocados y superponer silueta amarilla
     move $a0, $s0
-    li   $a1, Y_DEF_MIN             # Offset Y = 16
+    li   $a1, Y_DEF_MIN
     li   $a2, -1
     jal  dibujar_tablero_base
 
@@ -67,7 +58,6 @@ cfm_loop_preview:
     move $a3, $s5
     jal  dibujar_preview_barco
 
-    # 2. Vista: imprimir estado actual
     li   $v0, 4
     la   $a0, msg_colocando
     syscall
@@ -91,7 +81,6 @@ cfm_print_h:
     syscall
 
 cfm_leer:
-    # 3. Controlador: leer tecla
     jal  leer_tecla
 
     li   $t0, TECLA_R
@@ -101,7 +90,7 @@ cfm_leer:
     li   $t0, TECLA_ENTER
     beq  $v0, $t0, cfm_confirmar
 
-    # Calcular limites dinamicos segun orientacion y longitud del barco
+    # Limites dinamicos segun orientacion para no salir del 16x16 inferior
     beqz $s5, cfm_limites_h
     li   $t1, 15                    # Vertical: x_max = 15
     li   $t2, 32
@@ -131,19 +120,18 @@ cfm_rotar:
     xori $s5, $s5, 1                # Alternar 0 <-> 1
     beqz $s5, cfm_clamp_rot_h
     li   $t0, 32
-    sub  $t0, $t0, $s2              # Vertical: ajustar Y si Y > 32 - L
+    sub  $t0, $t0, $s2              # Si pasa a vertical, ajustar Y si excede borde inferior
     ble  $s4, $t0, cfm_loop_preview
     move $s4, $t0
     j    cfm_loop_preview
 cfm_clamp_rot_h:
     li   $t0, 16
-    sub  $t0, $t0, $s2              # Horizontal: ajustar X si X > 16 - L
+    sub  $t0, $t0, $s2              # Si pasa a horizontal, ajustar X si excede borde derecho
     ble  $s3, $t0, cfm_loop_preview
     move $s3, $t0
     j    cfm_loop_preview
 
 cfm_confirmar:
-    # 4. Modelo: validar posicion y colisiones
     move $a0, $s3
     move $a1, $s4
     move $a2, $s2
@@ -164,18 +152,17 @@ cfm_msg_lim:
     j    cfm_loop_preview
 
 cfm_guardar_barco:
-    # 5. Actualizar Modelo (tablero_defensa) con CELDA_BARCO (1)
-    li   $t0, 0                     # i = 0
+    li   $t0, 0
     move $t1, $s3                   # cx = X
     addi $t2, $s4, -16              # cy_local = Y - 16
 cfm_write_loop:
     bge  $t0, $s2, cfm_barco_guardado
 
-    sll  $t3, $t2, 4                # cy_local * 16
-    add  $t3, $t3, $t1              # indice 0..255
-    add  $t3, $s0, $t3              # direccion en tablero_defensa
+    sll  $t3, $t2, 4                # (cy_local * 16) + cx
+    add  $t3, $t3, $t1
+    add  $t3, $s0, $t3
     li   $t4, CELDA_BARCO
-    sb   $t4, 0($t3)
+    sb   $t4, 0($t3)                # Marcar casilla como ocupada (1)
 
     beqz $s5, cfm_w_h
     addi $t2, $t2, 1
@@ -195,7 +182,6 @@ cfm_barco_guardado:
     j    cfm_loop_barcos
 
 cfm_flota_ok:
-    # Redibujar defensa final en Gris (sin preview amarillo)
     move $a0, $s0
     li   $a1, Y_DEF_MIN
     li   $a2, -1

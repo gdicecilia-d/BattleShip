@@ -1,10 +1,4 @@
-# ==============================================================================
-# VISTA (RENDERIZADO): render_tablero.asm
-# Descripcion:
-#   Subrutinas graficas y de consola que traducen el estado del Modelo a pixeles
-#   en display_buffer (0x10010000) o texto en Run I/O. Nunca alteran las
-#   matrices logicas del Modelo.
-# ==============================================================================
+# Subrutinas de dibujo en el Bitmap Display y salida en consola
 
 .text
 .globl dibujar_celda
@@ -13,44 +7,32 @@
 .globl limpiar_pantalla_agua
 .globl imprimir_coordenadas
 
-# ------------------------------------------------------------------------------
-# SUBRUTINA: dibujar_celda (Hoja)
-#   Calcula: Dir(X, Y) = display_buffer + ((Y * 16) + X) * 4
-# Argumentos:
-#   $a0 = X (0..15)
-#   $a1 = Y (0..31 en pantalla completa)
-#   $a2 = Color RGB de 32 bits
-# Retorno: Ninguno. (No modifica $ra ni $s0-$s7)
-# ------------------------------------------------------------------------------
+# dibujar_celda($a0=X, $a1=Y, $a2=color)
+# Pinta una celda en display_buffer calculando: Base + ((Y * 16) + X) * 4
+# Subrutina hoja: no modifica $ra ni $s0-$s7
 dibujar_celda:
-    bltz $a0, dc_fuera_rango        # Guarda: X < 0 -> abortar
-    li   $t0, ANCHO_GRID            # $t0 = 16
-    bge  $a0, $t0, dc_fuera_rango   # Guarda: X >= 16 -> abortar
-    bltz $a1, dc_fuera_rango        # Guarda: Y < 0 -> abortar
-    li   $t0, ALTO_TOTAL            # $t0 = 32
-    bge  $a1, $t0, dc_fuera_rango   # Guarda: Y >= 32 -> abortar
+    bltz $a0, dc_fuera_rango        # Verificar que 0 <= X < 16
+    li   $t0, ANCHO_GRID
+    bge  $a0, $t0, dc_fuera_rango
+    bltz $a1, dc_fuera_rango        # Verificar que 0 <= Y < 32
+    li   $t0, ALTO_TOTAL
+    bge  $a1, $t0, dc_fuera_rango
 
-    sll  $t0, $a1, 4                # $t0 = Y * 16 (desplazar 4 bits izquierda)
-    add  $t0, $t0, $a0              # $t0 = (Y * 16) + X (indice 0..511)
+    sll  $t0, $a1, 4                # $t0 = Y * 16
+    add  $t0, $t0, $a0              # $t0 = (Y * 16) + X
     sll  $t0, $t0, 2                # $t0 = ((Y * 16) + X) * 4 (offset en bytes)
-    la   $t1, display_buffer        # $t1 = base 0x10010000
-    add  $t1, $t1, $t0              # $t1 = direccion final de palabra
-    sw   $a2, 0($t1)                # Pintar pixel en el Bitmap Display
+    la   $t1, display_buffer        # Base 0x10010000
+    add  $t1, $t1, $t0              # Direccion final en memoria
+    sw   $a2, 0($t1)                # Guardar color RGB de 32 bits
 
 dc_fuera_rango:
     jr   $ra
 
 
-# ------------------------------------------------------------------------------
-# SUBRUTINA: dibujar_tablero_base
-#   Redibuja una mitad de 16x16 desde su matriz logica (Agua/Barco/Impacto/Fallo)
-#   y superpone opcionalmente la casilla temporal de radar (Gris).
-# Argumentos:
-#   $a0 = Direccion base de la matriz logica (256 bytes)
-#   $a1 = Offset Y en pantalla (0 para Ataque, 16 para Defensa)
-#   $a2 = Indice lineal (0..255) revelado por radar, o -1 si inactivo
-# Retorno: Ninguno. (Preserva $ra y $s0-$s3 en $sp)
-# ------------------------------------------------------------------------------
+# dibujar_tablero_base($a0=addr_matriz, $a1=y_offset, $a2=radar_idx)
+# Redibuja una cuadricula de 16x16 desde su matriz logica y muestra
+# temporalmente la celda radar_idx en gris si radar_idx >= 0
+# Preserva $ra y $s0-$s3 en la pila
 dibujar_tablero_base:
     addi $sp, $sp, -20
     sw   $ra, 16($sp)
@@ -59,17 +41,17 @@ dibujar_tablero_base:
     sw   $s1, 4($sp)
     sw   $s0, 0($sp)
 
-    move $s0, $a0                   # $s0 = base matriz logica
-    move $s1, $a1                   # $s1 = y_offset pantalla
-    move $s2, $a2                   # $s2 = radar_idx
-    li   $s3, 0                     # $s3 = idx lineal (0..255)
+    move $s0, $a0                   # Base de matriz logica (256 bytes)
+    move $s1, $a1                   # Offset Y en pantalla (0 o 16)
+    move $s2, $a2                   # Indice temporal de radar (-1 si inactivo)
+    li   $s3, 0                     # Indice lineal (0..255)
 
 dtb_loop:
-    li   $t0, CELDAS_TABLERO        # 256
+    li   $t0, CELDAS_TABLERO
     bge  $s3, $t0, dtb_fin
 
     add  $t1, $s0, $s3
-    lbu  $t2, 0($t1)                # Leer byte logico de la casilla
+    lbu  $t2, 0($t1)                # Estado logico de la casilla
 
     li   $a2, COLOR_AGUA            # 0 = Agua (Azul)
     beqz $t2, dtb_check_radar
@@ -89,12 +71,12 @@ dtb_es_impacto:
     j    dtb_pintar
 
 dtb_check_radar:
-    bne  $s3, $s2, dtb_pintar       # Si idx == radar_idx y aun no disparada -> Gris
+    bne  $s3, $s2, dtb_pintar       # Si coincide con radar activo, pintar gris
     li   $a2, COLOR_BARCO
 
 dtb_pintar:
-    andi $a0, $s3, 15               # X = idx & 15
-    srl  $t0, $s3, 4                # Y_local = idx >> 4
+    andi $a0, $s3, 15               # X = idx mod 16
+    srl  $t0, $s3, 4                # Y_local = idx / 16
     add  $a1, $t0, $s1              # Y_pantalla = Y_local + y_offset
     jal  dibujar_celda
 
@@ -111,13 +93,9 @@ dtb_fin:
     jr   $ra
 
 
-# ------------------------------------------------------------------------------
-# SUBRUTINA: dibujar_preview_barco
-#   Dibuja en Amarillo (0xFFFF00) la silueta tentativa del barco actual.
-# Argumentos:
-#   $a0 = X, $a1 = Y (16..31), $a2 = longitud, $a3 = orientacion (0=H, 1=V)
-# Retorno: Ninguno. (Preserva $ra y $s0-$s4 en $sp)
-# ------------------------------------------------------------------------------
+# dibujar_preview_barco($a0=X, $a1=Y, $a2=longitud, $a3=orientacion)
+# Pinta en amarillo la silueta tentativa del barco durante la colocacion
+# Preserva $ra y $s0-$s4 en la pila
 dibujar_preview_barco:
     addi $sp, $sp, -24
     sw   $ra, 20($sp)
@@ -130,8 +108,8 @@ dibujar_preview_barco:
     move $s0, $a0                   # X
     move $s1, $a1                   # Y
     move $s2, $a2                   # longitud
-    move $s3, $a3                   # orientacion
-    li   $s4, 0                     # i = 0
+    move $s3, $a3                   # orientacion (0=H, 1=V)
+    li   $s4, 0                     # contador i = 0
 
 dpb_loop:
     bge  $s4, $s2, dpb_fin
@@ -141,10 +119,10 @@ dpb_loop:
     jal  dibujar_celda
 
     beqz $s3, dpb_step_h
-    addi $s1, $s1, 1                # Vertical: Y++
+    addi $s1, $s1, 1                # Vertical: avanzar en Y
     j    dpb_next
 dpb_step_h:
-    addi $s0, $s0, 1                # Horizontal: X++
+    addi $s0, $s0, 1                # Horizontal: avanzar en X
 dpb_next:
     addi $s4, $s4, 1
     j    dpb_loop
@@ -160,13 +138,11 @@ dpb_fin:
     jr   $ra
 
 
-# ------------------------------------------------------------------------------
-# SUBRUTINA: limpiar_pantalla_agua (Hoja)
-#   Pinta las 512 celdas (16 x 32) de display_buffer en Azul (0x0000FF).
-# ------------------------------------------------------------------------------
+# limpiar_pantalla_agua()
+# Rellena las 512 palabras de display_buffer con color azul (agua)
 limpiar_pantalla_agua:
     la   $t0, display_buffer
-    li   $t1, CELDAS_PANTALLA       # 512 palabras
+    li   $t1, CELDAS_PANTALLA
     li   $t2, COLOR_AGUA
 lpa_loop:
     beqz $t1, lpa_fin
@@ -178,11 +154,8 @@ lpa_fin:
     jr   $ra
 
 
-# ------------------------------------------------------------------------------
-# SUBRUTINA: imprimir_coordenadas (Hoja)
-#   Imprime "X,Y" en consola via syscall 1 y syscall 4.
-# Argumentos: $a0 = X, $a1 = Y
-# ------------------------------------------------------------------------------
+# imprimir_coordenadas($a0=X, $a1=Y)
+# Imprime "X,Y" en consola usando syscall 1 y syscall 4
 imprimir_coordenadas:
     move $t0, $a0
     move $t1, $a1
