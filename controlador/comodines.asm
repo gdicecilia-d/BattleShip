@@ -6,10 +6,6 @@
 .globl ejecutar_comodin
 
 # intentar_comodin_radar($a0=tablero_enemigo, $a1=tablero_ataque)
-# Con 5% de probabilidad ($a1=100, $a0<5), busca una casilla con barco
-# sin impactar y la revela temporalmente en gris en la zona superior
-# Retorna: $v0 = 1/0; $v1 = indice lineal (Y*16 + X) o -1 si no se activo
-# Preserva $ra y $s0-$s3 en la pila
 intentar_comodin_radar:
     addi $sp, $sp, -20
     sw   $ra, 16($sp)
@@ -18,17 +14,17 @@ intentar_comodin_radar:
     sw   $s1, 4($sp)
     sw   $s0, 0($sp)
 
-    move $s0, $a0                   # Base tablero_enemigo
-    move $s1, $a1                   # Base tablero_ataque
+    move $s0, $a0                   
+    move $s1, $a1                   
 
-    li   $v0, 42                    # Aleatorio en [0, 99]
+    li   $v0, 42                    
     li   $a0, 0
     li   $a1, 100
     syscall
     li   $t0, 5
     bge  $a0, $t0, icr_no_activado
 
-    li   $v0, 42                    # Punto de inicio aleatorio en [0, 255]
+    li   $v0, 42                    
     li   $a0, 0
     li   $a1, CELDAS_TABLERO
     syscall
@@ -40,7 +36,7 @@ icr_buscar_loop:
     bge  $s3, $t0, icr_no_activado
 
     add  $t1, $s2, $s3
-    andi $t1, $t1, 255              # idx = (start + k) mod 256
+    andi $t1, $t1, 255              
 
     add  $t2, $s0, $t1
     lbu  $t3, 0($t2)
@@ -53,9 +49,9 @@ icr_buscar_loop:
     bnez $t3, icr_siguiente
 
 icr_encontrado:
-    andi $s2, $t1, 15               # X = idx & 15
-    srl  $s3, $t1, 4                # Y = idx >> 4
-    move $s0, $t1                   # Guardar idx para retorno
+    andi $s2, $t1, 15               
+    srl  $s3, $t1, 4                
+    move $s0, $t1                   
 
     move $a0, $s2
     move $a1, $s3
@@ -95,9 +91,6 @@ icr_epilogo:
 
 
 # intentar_comodin_area($a0=X, $a1=Y, $a2=tablero_enemigo, $a3=tablero_ataque)
-# Con probabilidad 1 en 7 ($a1=7, $a0==0), ataca una vecindad 3x3 centrada
-# en (X, Y) respetando los limites [0..15] x [0..15]
-# Retorna: $v0 = 1/0; $v1 = nuevos impactos logrados. Preserva $ra y $s0-$s6
 intentar_comodin_area:
     addi $sp, $sp, -32
     sw   $ra, 28($sp)
@@ -109,46 +102,49 @@ intentar_comodin_area:
     sw   $s1, 4($sp)
     sw   $s0, 0($sp)
 
-    move $s0, $a0                   # X centro
-    move $s1, $a1                   # Y centro
-    move $s2, $a2                   # tablero_enemigo
-    move $s3, $a3                   # tablero_ataque
+    move $s0, $a0                   
+    move $s1, $a1                   
+    move $s2, $a2                   
+    move $s3, $a3                   
 
-    li   $v0, 42                    # Aleatorio en [0, 6]
+    li   $v0, 42                    
     li   $a0, 0
     li   $a1, 7
     syscall
     bnez $a0, ica_no_activado
 
-    li   $s4, 0                     # Contador de nuevos impactos
-    li   $s5, -1                    # dy = -1..+1
+    li   $s4, 0                     
+    li   $s5, -1                    
 
 ica_loop_dy:
     li   $t0, 1
     bgt  $s5, $t0, ica_fin_area
 
-    add  $t1, $s1, $s5              # ny = Y + dy
+    add  $t1, $s1, $s5              
     bltz $t1, ica_next_dy
     li   $t2, Y_ATK_MAX
     bgt  $t1, $t2, ica_next_dy
 
-    li   $s6, -1                    # dx = -1..+1
+    li   $s6, -1                    
 
 ica_loop_dx:
     li   $t0, 1
     bgt  $s6, $t0, ica_next_dy
 
-    add  $t3, $s0, $s6              # nx = X + dx
+    add  $t3, $s0, $s6              
     bltz $t3, ica_next_dx
     li   $t2, 15
     bgt  $t3, $t2, ica_next_dx
 
     add  $t1, $s1, $s5
     sll  $t4, $t1, 4
-    add  $t4, $t4, $t3              # idx = (ny * 16) + nx
+    add  $t4, $t4, $t3              
 
     add  $t5, $s2, $t4
     lbu  $t6, 0($t5)
+
+    li   $t7, CELDA_HUNDIDO
+    beq  $t6, $t7, ica_next_dx
 
     li   $t7, CELDA_BARCO
     beq  $t6, $t7, ica_nuevo_hit
@@ -175,11 +171,30 @@ ica_ya_hit:
     beqz $s3, ica_draw_hit
     add  $t8, $s3, $t4
     sb   $t7, 0($t8)
+
 ica_draw_hit:
+    # GUARDAMOS X e Y ANTES de dibujar, porque dibujar_celda sobrescribe $t1
+    move $t8, $t3                   
+    move $t9, $t1                   
+    
     move $a0, $t3
     move $a1, $t1
     li   $a2, COLOR_IMPACTO
     jal  dibujar_celda
+
+    # Verificar si este impacto hundio el barco usando los registros seguros
+    move $a0, $t8
+    move $a1, $t9
+    move $a2, $s2
+    jal  verificar_hundimiento
+    beqz $v0, ica_next_dx           
+
+    # Si se hundio, pintar TODO el barco de gris
+    move $a0, $t8
+    move $a1, $t9
+    move $a2, $s2
+    move $a3, $s3
+    jal  marcar_hundido
 
 ica_next_dx:
     addi $s6, $s6, 1
@@ -228,7 +243,6 @@ ica_epilogo:
 
 
 # ejecutar_comodin($a0=modo, $a1=X, $a2=Y)
-# Modo 0: intenta radar; Modo 1: intenta ataque 3x3 en (X, Y)
 ejecutar_comodin:
     addi $sp, $sp, -4
     sw   $ra, 0($sp)

@@ -46,7 +46,8 @@ mc_abajo:
     j    mc_fin
 
 mc_izquierda:
-    blez $v0, mc_fin
+    li   $t4, 1                     # NUEVO: X_min = 1 (no puede ser 0)
+    ble  $v0, $t4, mc_fin
     addi $v0, $v0, -1
     j    mc_fin
 
@@ -74,23 +75,25 @@ mover_cursor_ataque:
     move $s2, $a2                   # Base tablero_ataque
     move $s3, $a3                   # Indice de radar (-1 si inactivo)
 
-    # Asegurar coordenadas iniciales en [0..15] x [0..15]
-    bltz $s0, mca_clamp_x0
-    li   $t0, 15
+    # Asegurar coordenadas iniciales en [1..14] x [1..14]
+    li   $t0, 1
+    blt  $s0, $t0, mca_clamp_x0
+    li   $t0, 14
     ble  $s0, $t0, mca_check_y
-    li   $s0, 15
+    li   $s0, 14
     j    mca_check_y
 mca_clamp_x0:
-    li   $s0, 0
+    li   $s0, 1
 
 mca_check_y:
-    bltz $s1, mca_clamp_y0
-    li   $t0, 15
+    li   $t0, 1
+    blt  $s1, $t0, mca_clamp_y0
+    li   $t0, 14
     ble  $s1, $t0, mca_bucle
-    li   $s1, 15
+    li   $s1, 14
     j    mca_bucle
 mca_clamp_y0:
-    li   $s1, 0
+    li   $s1, 1
 
 mca_bucle:
     move $a0, $s2
@@ -100,7 +103,7 @@ mca_bucle:
 
     move $a0, $s0
     move $a1, $s1
-    li   $a2, COLOR_CURSOR          # Pintar cursor amarillo en (X, Y)
+    li   $a2, COLOR_CURSOR_1        # Pintar cursor blanco humo en (X, Y)
     jal  dibujar_celda
 
     li   $v0, 4

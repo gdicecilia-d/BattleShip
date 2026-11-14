@@ -3,10 +3,10 @@
 .text
 .globl ejecutar_demo_ataque
 .globl procesar_disparo_simple
+.globl verificar_hundimiento
+.globl marcar_hundido
 
 # ejecutar_demo_ataque()
-# Bucle principal de ataque hasta hundir toda la flota enemiga
-# Preserva $ra y $s0-$s2 en la pila
 ejecutar_demo_ataque:
     addi $sp, $sp, -16
     sw   $ra, 12($sp)
@@ -18,8 +18,8 @@ ejecutar_demo_ataque:
     la   $a0, msg_fase_atk
     syscall
 
-    li   $s0, 0                     # Cursor X inicial
-    li   $s1, 0                     # Cursor Y inicial
+    li   $s0, 1                     # Cursor X inicial
+    li   $s1, 1                     # Cursor Y inicial
 
 eda_bucle:
     la   $a0, tablero_enemigo
@@ -51,7 +51,7 @@ eda_bucle:
 eda_fin_turno:
     la   $a0, tablero_ataque
     li   $a1, Y_ATK_MIN
-    li   $a2, -1                    # Ocultar pista temporal del radar al cerrar turno
+    li   $a2, -1                    # Ocultar pista temporal del radar
     jal  dibujar_tablero_base
 
     la   $a0, tablero_enemigo
@@ -62,6 +62,12 @@ eda_fin_turno:
     la   $a0, msg_victoria
     syscall
 
+    # Pausa para ver el tablero final
+    li   $v0, 4
+    la   $a0, msg_pausa_fin
+    syscall
+    jal  leer_tecla
+
     lw   $s0, 0($sp)
     lw   $s1, 4($sp)
     lw   $s2, 8($sp)
@@ -71,7 +77,6 @@ eda_fin_turno:
 
 
 # procesar_disparo_simple($a0=X, $a1=Y, $a2=tablero_enemigo, $a3=tablero_ataque)
-# Ejecuta un disparo de una sola casilla y actualiza matriz y pantalla
 procesar_disparo_simple:
     addi $sp, $sp, -20
     sw   $ra, 16($sp)
@@ -85,6 +90,13 @@ procesar_disparo_simple:
     move $s2, $a2
     move $s3, $a3
 
+    # Validar bordes
+    blez $s0, pds_borde_error
+    li   $t0, 15
+    bge  $s0, $t0, pds_borde_error
+    blez $s1, pds_borde_error
+    beq  $s1, $t0, pds_borde_error
+
     sll  $t0, $s1, 4
     add  $t0, $t0, $s0              # idx = (Y * 16) + X
 
@@ -97,6 +109,7 @@ procesar_disparo_simple:
     li   $t5, CELDA_BARCO
     beq  $t4, $t5, pds_impacto
 
+    # Fallo (Agua)
     li   $t5, CELDA_FALLO
     sb   $t5, 0($t1)
     sb   $t5, 0($t3)
@@ -122,7 +135,31 @@ pds_impacto:
     li   $v0, 4
     la   $a0, msg_tiro_hit
     syscall
+
+    # Verificar Hundimiento
+    move $a0, $s0
+    move $a1, $s1
+    move $a2, $s2
+    jal  verificar_hundimiento
+    beqz $v0, pds_coord             # Si no se hundió, salta
+    
+    # Si llegó aquí, se hundió. Pintar todo el barco de gris.
+    li   $v0, 4
+    la   $a0, msg_hundido
+    syscall
+    move $a0, $s0
+    move $a1, $s1
+    move $a2, $s2
+    move $a3, $s3
+    jal  marcar_hundido
+
     j    pds_coord
+
+pds_borde_error:
+    li   $v0, 4
+    la   $a0, msg_err_borde
+    syscall
+    j    pds_fin
 
 pds_duplicado:
     li   $v0, 4
@@ -137,6 +174,161 @@ pds_coord:
     la   $a0, msg_cierre_par
     syscall
 
+pds_fin:
+    lw   $s0, 0($sp)
+    lw   $s1, 4($sp)
+    lw   $s2, 8($sp)
+    lw   $s3, 12($sp)
+    lw   $ra, 16($sp)
+    addi $sp, $sp, 20
+    jr   $ra
+
+
+# verificar_hundimiento($a0=X, $a1=Y, $a2=tablero_enemigo) -> $v0 = 1 si hundido, 0 si no
+verificar_hundimiento:
+    # Busca a la IZQUIERDA
+    move $t0, $a0
+vh_loop_left:
+    addi $t0, $t0, -1               
+    bltz $t0, vh_check_right
+    sll $t1, $a1, 4
+    add $t1, $t1, $t0
+    add $t2, $a2, $t1
+    lbu $t3, 0($t2)
+    li $t4, CELDA_BARCO
+    beq $t3, $t4, vh_no_hundido
+    li $t4, CELDA_IMPACTO
+    beq $t3, $t4, vh_loop_left
+    j vh_check_right
+
+    # Busca a la DERECHA
+vh_check_right:
+    move $t0, $a0
+vh_loop_right:
+    addi $t0, $t0, 1
+    li $t1, 15
+    bgt $t0, $t1, vh_check_up
+    sll $t1, $a1, 4
+    add $t1, $t1, $t0
+    add $t2, $a2, $t1
+    lbu $t3, 0($t2)
+    li $t4, CELDA_BARCO
+    beq $t3, $t4, vh_no_hundido
+    li $t4, CELDA_IMPACTO
+    beq $t3, $t4, vh_loop_right
+    j vh_check_up
+
+    # Busca ARRIBA
+vh_check_up:
+    move $t0, $a1
+vh_loop_up:
+    addi $t0, $t0, -1               
+    bltz $t0, vh_check_down
+    sll $t1, $t0, 4
+    add $t1, $t1, $a0
+    add $t2, $a2, $t1
+    lbu $t3, 0($t2)
+    li $t4, CELDA_BARCO
+    beq $t3, $t4, vh_no_hundido
+    li $t4, CELDA_IMPACTO
+    beq $t3, $t4, vh_loop_up
+    j vh_check_down
+
+    # Busca ABAJO
+vh_check_down:
+    move $t0, $a1
+vh_loop_down:
+    addi $t0, $t0, 1
+    li $t1, 15
+    bgt $t0, $t1, vh_si_hundido
+    sll $t1, $t0, 4
+    add $t1, $t1, $a0
+    add $t2, $a2, $t1
+    lbu $t3, 0($t2)
+    li $t4, CELDA_BARCO
+    beq $t3, $t4, vh_no_hundido
+    li $t4, CELDA_IMPACTO
+    beq $t3, $t4, vh_loop_down
+    j vh_si_hundido
+
+vh_si_hundido:
+    li $v0, 1
+    jr $ra
+vh_no_hundido:
+    li $v0, 0
+    jr $ra
+
+
+# marcar_hundido($a0=X, $a1=Y, $a2=tablero_enemigo, $a3=tablero_ataque)
+# Función recursiva que pinta todo el barco de gris
+marcar_hundido:
+    addi $sp, $sp, -20
+    sw   $ra, 16($sp)
+    sw   $s3, 12($sp)
+    sw   $s2, 8($sp)
+    sw   $s1, 4($sp)
+    sw   $s0, 0($sp)
+
+    move $s0, $a0                   # X
+    move $s1, $a1                   # Y
+    move $s2, $a2                   # tablero_enemigo
+    move $s3, $a3                   # tablero_ataque
+
+    # Verificar límites
+    bltz $s0, mh_fin
+    li   $t0, 15
+    bgt  $s0, $t0, mh_fin
+    bltz $s1, mh_fin
+    bgt  $s1, $t0, mh_fin
+
+    # Calcular índice
+    sll  $t1, $s1, 4
+    add  $t1, $t1, $s0
+    add  $t2, $s2, $t1
+    lbu  $t3, 0($t2)
+    
+    # Solo pintar si la casilla es un IMPACTO (evita pintar agua)
+    li   $t4, CELDA_IMPACTO
+    bne  $t3, $t4, mh_fin
+
+    # Cambiar estado a HUNDIDO en ambos tableros
+    li   $t4, CELDA_HUNDIDO
+    sb   $t4, 0($t2)
+    add  $t5, $s3, $t1
+    sb   $t4, 0($t5)
+
+    # Pintar de gris
+    move $a0, $s0
+    move $a1, $s1
+    li   $a2, COLOR_HUNDIDO
+    jal  dibujar_celda
+
+    # Llamadas recursivas (Arriba, Abajo, Izquierda, Derecha)
+    move $a0, $s0
+    addi $a1, $s1, -1
+    move $a2, $s2
+    move $a3, $s3
+    jal  marcar_hundido
+
+    move $a0, $s0
+    addi $a1, $s1, 1
+    move $a2, $s2
+    move $a3, $s3
+    jal  marcar_hundido
+
+    addi $a0, $s0, -1
+    move $a1, $s1
+    move $a2, $s2
+    move $a3, $s3
+    jal  marcar_hundido
+
+    addi $a0, $s0, 1
+    move $a1, $s1
+    move $a2, $s2
+    move $a3, $s3
+    jal  marcar_hundido
+
+mh_fin:
     lw   $s0, 0($sp)
     lw   $s1, 4($sp)
     lw   $s2, 8($sp)

@@ -41,8 +41,8 @@ cfm_loop_barcos:
     add  $t1, $t1, $t0
     lw   $s6, 0($t1)                # Nombre actual
 
-    li   $s3, 0                     # X inicial
-    li   $s4, Y_DEF_MIN             # Y inicial (16)
+    li   $s3, 1                     # X inicial (empezamos en 1, no en el borde)
+    li   $s4, 17                    # Y inicial = 17 (borde superior es 16)
     li   $s5, ORIENT_HORIZ          # Orientacion inicial (0 = Horizontal)
 
 cfm_loop_preview:
@@ -92,18 +92,18 @@ cfm_leer:
 
     # Limites dinamicos segun orientacion para no salir del 16x16 inferior
     beqz $s5, cfm_limites_h
-    li   $t1, 15                    # Vertical: x_max = 15
-    li   $t2, 32
-    sub  $t2, $t2, $s2              # Vertical: y_max = 32 - longitud
+    li   $t1, 14                    # Vertical: x_max = 14 (X no puede ser 15)
+    li   $t2, 31
+    sub  $t2, $t2, $s2              # Vertical: y_max = 31 - longitud
     j    cfm_empaquetar_lim
 cfm_limites_h:
-    li   $t1, 16
-    sub  $t1, $t1, $s2              # Horizontal: x_max = 16 - longitud
-    li   $t2, Y_DEF_MAX             # Horizontal: y_max = 31
+    li   $t1, 15
+    sub  $t1, $t1, $s2              # Horizontal: x_max = 15 - longitud
+    li   $t2, 30                    # Horizontal: y_max = 30 (Y no puede ser 31)
 
 cfm_empaquetar_lim:
     sll  $a3, $t1, 16
-    li   $t3, Y_DEF_MIN
+    li   $t3, 17                    # Y_min = 17 (borde superior es 16)
     sll  $t3, $t3, 8
     or   $a3, $a3, $t3
     or   $a3, $a3, $t2
@@ -119,16 +119,28 @@ cfm_empaquetar_lim:
 cfm_rotar:
     xori $s5, $s5, 1                # Alternar 0 <-> 1
     beqz $s5, cfm_clamp_rot_h
-    li   $t0, 32
-    sub  $t0, $t0, $s2              # Si pasa a vertical, ajustar Y si excede borde inferior
-    ble  $s4, $t0, cfm_loop_preview
+    
+    # ajustar X y Y para que no toquen bordes
+    li   $t0, 31
+    sub  $t0, $t0, $s2              # y_max = 31 - longitud
+    ble  $s4, $t0, cfm_rot_v_x
     move $s4, $t0
-    j    cfm_loop_preview
-cfm_clamp_rot_h:
-    li   $t0, 16
-    sub  $t0, $t0, $s2              # Si pasa a horizontal, ajustar X si excede borde derecho
+cfm_rot_v_x:
+    li   $t0, 14                    # x_max = 14
     ble  $s3, $t0, cfm_loop_preview
     move $s3, $t0
+    j    cfm_loop_preview
+
+cfm_clamp_rot_h:
+    # Ahora es Horizontal: ajustar X y Y para que no toquen bordes
+    li   $t0, 15
+    sub  $t0, $t0, $s2              # x_max = 15 - longitud
+    ble  $s3, $t0, cfm_rot_h_y
+    move $s3, $t0
+cfm_rot_h_y:
+    li   $t0, 30                    # y_max = 30
+    ble  $s4, $t0, cfm_loop_preview
+    move $s4, $t0
     j    cfm_loop_preview
 
 cfm_confirmar:
