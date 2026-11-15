@@ -3,10 +3,6 @@
 .text
 .globl colocar_flota_manual
 
-# colocar_flota_manual()
-# Permite mover (WASD), rotar (R) y confirmar (E/Enter) cada barco con
-# preview en amarillo y validacion contra tablero_defensa (Y=16..31)
-# Preserva $ra y $s0-$s6 en la pila
 colocar_flota_manual:
     addi $sp, $sp, -32
     sw   $ra, 28($sp)
@@ -92,18 +88,18 @@ cfm_leer:
 
     # Limites dinamicos segun orientacion para no salir del 16x16 inferior
     beqz $s5, cfm_limites_h
-    li   $t1, 14                    # Vertical: x_max = 14 (X no puede ser 15)
+    li   $t1, 14                    # Vertical: x_max = 14
     li   $t2, 31
     sub  $t2, $t2, $s2              # Vertical: y_max = 31 - longitud
     j    cfm_empaquetar_lim
 cfm_limites_h:
     li   $t1, 15
     sub  $t1, $t1, $s2              # Horizontal: x_max = 15 - longitud
-    li   $t2, 30                    # Horizontal: y_max = 30 (Y no puede ser 31)
+    li   $t2, 30                    # Horizontal: y_max = 30
 
 cfm_empaquetar_lim:
     sll  $a3, $t1, 16
-    li   $t3, 17                    # Y_min = 17 (borde superior es 16)
+    li   $t3, 17                    # Y_min = 17
     sll  $t3, $t3, 8
     or   $a3, $a3, $t3
     or   $a3, $a3, $t2
@@ -116,32 +112,34 @@ cfm_empaquetar_lim:
     move $s4, $v1
     j    cfm_loop_preview
 
+# --- BLOQUE CORREGIDO PARA QUE NO TOQUE LA ARENA AL ROTAR ---
 cfm_rotar:
     xori $s5, $s5, 1                # Alternar 0 <-> 1
     beqz $s5, cfm_clamp_rot_h
-    
-    # ajustar X y Y para que no toquen bordes
+        
+    # Ahora es VERTICAL (1 columna)
+    li   $t0, 14                    # x_max = 14
+    ble  $s3, $t0, cfm_rot_v_y
+    move $s3, $t0
+cfm_rot_v_y:
     li   $t0, 31
     sub  $t0, $t0, $s2              # y_max = 31 - longitud
-    ble  $s4, $t0, cfm_rot_v_x
-    move $s4, $t0
-cfm_rot_v_x:
-    li   $t0, 14                    # x_max = 14
-    ble  $s3, $t0, cfm_loop_preview
-    move $s3, $t0
-    j    cfm_loop_preview
-
-cfm_clamp_rot_h:
-    # Ahora es Horizontal: ajustar X y Y para que no toquen bordes
-    li   $t0, 15
-    sub  $t0, $t0, $s2              # x_max = 15 - longitud
-    ble  $s3, $t0, cfm_rot_h_y
-    move $s3, $t0
-cfm_rot_h_y:
-    li   $t0, 30                    # y_max = 30
     ble  $s4, $t0, cfm_loop_preview
     move $s4, $t0
     j    cfm_loop_preview
+
+cfm_clamp_rot_h:
+    # Ahora es HORIZONTAL (1 fila)
+    li   $t0, 30                    # y_max = 30
+    ble  $s4, $t0, cfm_rot_h_x
+    move $s4, $t0
+cfm_rot_h_x:
+    li   $t0, 15
+    sub  $t0, $t0, $s2              # x_max = 15 - longitud
+    ble  $s3, $t0, cfm_loop_preview
+    move $s3, $t0
+    j    cfm_loop_preview
+# -------------------------------------------------------------
 
 cfm_confirmar:
     move $a0, $s3
