@@ -3,11 +3,11 @@
 Proyecto Final - Organización del Computador  
 Universidad Metropolitana 
 
-## Descripción
+## 📖 Descripción
 
 Este es un clásico juego de Batalla Naval programado completamente en ensamblador MIPS R2000 y ejecutado en el simulador MARS 4.5. El juego utiliza la herramienta Bitmap Display para mostrar una interfaz gráfica dividida en dos tableros (ataque y defensa). Incluye lógica de turnos, una inteligencia artificial para la CPU, comodines aleatorios y un sistema de puntuación.
 
-## Características principales
+## ✨ Características principales
 
 - Interfaz gráfica con efecto de olas, bordes de arena y cursor parpadeante.
 - Dos modos de juego: Jugador contra Jugador (PvP) y Jugador contra CPU (PvCPU).
@@ -17,7 +17,7 @@ Este es un clásico juego de Batalla Naval programado completamente en ensamblad
 - Sistema de puntuación: +1 punto por impacto, +5 puntos por barco hundido.
 - Validación estricta: no se pueden colocar barcos sobre otros, fuera de los límites ni en las zonas de arena. Tampoco se puede disparar dos veces a la misma casilla.
 
-## Requisitos y configuración en MARS
+## 🛠️ Requisitos y configuración en MARS
 
 Para ejecutar el juego, necesitas tener instalado Java y MARS 4.5.
 
