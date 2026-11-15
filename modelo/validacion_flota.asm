@@ -3,53 +3,50 @@
 .text
 .globl validar_posicion_barco
 
-# validar_posicion_barco($a0=X, $a1=Y, $a2=longitud, $a3=orientacion)
+# validar_posicion_barco($a0=X, $a1=Y, $a2=longitud, $a3=orientacion, $t9=tablero_base)
 validar_posicion_barco:
     # Borde izquierdo y derecho (X=0 y X=15 son arena) 
-    blez $a0, vpb_err_limites       # X <= 0 -> error
+    blez $a0, vpb_err_limites
     li   $t0, 15
-    bge  $a0, $t0, vpb_err_limites  # X >= 15 -> error
+    bge  $a0, $t0, vpb_err_limites
 
     # Bordes superior e inferior (Y=16 y Y=31 son arena) 
-    li   $t0, Y_DEF_MIN             # 16
-    ble  $a1, $t0, vpb_err_limites  # Y <= 16 -> error
-    li   $t0, Y_DEF_MAX             # 31
-    bge  $a1, $t0, vpb_err_limites  # Y >= 31 -> error
+    li   $t0, Y_DEF_MIN
+    ble  $a1, $t0, vpb_err_limites
+    li   $t0, Y_DEF_MAX
+    bge  $a1, $t0, vpb_err_limites
 
-    blez $a2, vpb_err_limites       # longitud > 0
+    blez $a2, vpb_err_limites
 
     beqz $a3, vpb_check_horiz       
     li   $t0, ORIENT_VERT           
     beq  $a3, $t0, vpb_check_vert
     j    vpb_err_limites
 
-
 vpb_check_horiz:
-    add  $t0, $a0, $a2              # X + longitud
-    li   $t1, 15                    
-    bgt  $t0, $t1, vpb_err_limites  
+    add  $t0, $a0, $a2
+    li   $t1, 15
+    bgt  $t0, $t1, vpb_err_limites
     j    vpb_check_colision
 
 vpb_check_vert:
-    add  $t0, $a1, $a2              # Y + longitud
-    li   $t1, 31                    
-    bgt  $t0, $t1, vpb_err_limites  
+    add  $t0, $a1, $a2
+    li   $t1, 31
+    bgt  $t0, $t1, vpb_err_limites
 
 vpb_check_colision:
-    la   $t0, tablero_defensa       
+    move $t0, $t9                   # Tablero base viene en $t9
     addi $t1, $a1, -16              
     move $t2, $a0                   
     li   $t3, 0                     
 
 vpb_loop_celdas:
     bge  $t3, $a2, vpb_valido
-
     sll  $t4, $t1, 4                
     add  $t4, $t4, $t2              
     add  $t4, $t0, $t4              
     lbu  $t5, 0($t4)                
     bnez $t5, vpb_err_colision      
-
     beqz $a3, vpb_step_h
     addi $t1, $t1, 1                
     j    vpb_next

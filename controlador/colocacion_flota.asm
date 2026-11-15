@@ -3,6 +3,7 @@
 .text
 .globl colocar_flota_manual
 
+# colocar_flota_manual($a0 = direccion del tablero donde guardar la flota)
 colocar_flota_manual:
     addi $sp, $sp, -32
     sw   $ra, 28($sp)
@@ -14,7 +15,8 @@ colocar_flota_manual:
     sw   $s1, 4($sp)
     sw   $s0, 0($sp)
 
-    la   $s0, tablero_defensa       # Base matriz de defensa
+    move $s0, $a0                   # Base matriz donde guardar
+
     move $a0, $s0
     jal  limpiar_matriz_256
 
@@ -28,21 +30,20 @@ cfm_loop_barcos:
     li   $t0, 4
     bge  $s1, $t0, cfm_flota_ok
 
-    sll  $t0, $s1, 2                # ship_idx * 4 bytes
+    sll  $t0, $s1, 2
     la   $t1, longitudes_flota
     add  $t1, $t1, $t0
-    lw   $s2, 0($t1)                # Longitud actual (5, 4, 3 o 2)
+    lw   $s2, 0($t1)                # Longitud actual
 
     la   $t1, nombres_flota
     add  $t1, $t1, $t0
     lw   $s6, 0($t1)                # Nombre actual
 
-    li   $s3, 1                     # X inicial (empezamos en 1, no en el borde)
-    li   $s4, 17                    # Y inicial = 17 (borde superior es 16)
-    li   $s5, ORIENT_HORIZ          # Orientacion inicial (0 = Horizontal)
+    li   $s3, 1                     # X inicial
+    li   $s4, 17                    # Y inicial
+    li   $s5, ORIENT_HORIZ          # Orientacion inicial
 
 cfm_loop_preview:
-    # Redibujar barcos ya colocados y superponer silueta amarilla
     move $a0, $s0
     li   $a1, Y_DEF_MIN
     li   $a2, -1
@@ -86,20 +87,19 @@ cfm_leer:
     li   $t0, TECLA_ENTER
     beq  $v0, $t0, cfm_confirmar
 
-    # Limites dinamicos segun orientacion para no salir del 16x16 inferior
     beqz $s5, cfm_limites_h
-    li   $t1, 14                    # Vertical: x_max = 14
+    li   $t1, 14
     li   $t2, 31
-    sub  $t2, $t2, $s2              # Vertical: y_max = 31 - longitud
+    sub  $t2, $t2, $s2
     j    cfm_empaquetar_lim
 cfm_limites_h:
     li   $t1, 15
-    sub  $t1, $t1, $s2              # Horizontal: x_max = 15 - longitud
-    li   $t2, 30                    # Horizontal: y_max = 30
+    sub  $t1, $t1, $s2
+    li   $t2, 30
 
 cfm_empaquetar_lim:
     sll  $a3, $t1, 16
-    li   $t3, 17                    # Y_min = 17
+    li   $t3, 17
     sll  $t3, $t3, 8
     or   $a3, $a3, $t3
     or   $a3, $a3, $t2
@@ -112,40 +112,35 @@ cfm_empaquetar_lim:
     move $s4, $v1
     j    cfm_loop_preview
 
-# --- BLOQUE CORREGIDO PARA QUE NO TOQUE LA ARENA AL ROTAR ---
 cfm_rotar:
-    xori $s5, $s5, 1                # Alternar 0 <-> 1
+    xori $s5, $s5, 1
     beqz $s5, cfm_clamp_rot_h
-        
-    # Ahora es VERTICAL (1 columna)
-    li   $t0, 14                    # x_max = 14
+    li   $t0, 14
     ble  $s3, $t0, cfm_rot_v_y
     move $s3, $t0
 cfm_rot_v_y:
     li   $t0, 31
-    sub  $t0, $t0, $s2              # y_max = 31 - longitud
+    sub  $t0, $t0, $s2
     ble  $s4, $t0, cfm_loop_preview
     move $s4, $t0
     j    cfm_loop_preview
-
 cfm_clamp_rot_h:
-    # Ahora es HORIZONTAL (1 fila)
-    li   $t0, 30                    # y_max = 30
+    li   $t0, 30
     ble  $s4, $t0, cfm_rot_h_x
     move $s4, $t0
 cfm_rot_h_x:
     li   $t0, 15
-    sub  $t0, $t0, $s2              # x_max = 15 - longitud
+    sub  $t0, $t0, $s2
     ble  $s3, $t0, cfm_loop_preview
     move $s3, $t0
     j    cfm_loop_preview
-# -------------------------------------------------------------
 
 cfm_confirmar:
     move $a0, $s3
     move $a1, $s4
     move $a2, $s2
     move $a3, $s5
+    move $t9, $s0                   # Pasar tablero base en $t9 (no existe $a4)
     jal  validar_posicion_barco
     bnez $v0, cfm_guardar_barco
 
@@ -163,17 +158,15 @@ cfm_msg_lim:
 
 cfm_guardar_barco:
     li   $t0, 0
-    move $t1, $s3                   # cx = X
-    addi $t2, $s4, -16              # cy_local = Y - 16
+    move $t1, $s3
+    addi $t2, $s4, -16
 cfm_write_loop:
     bge  $t0, $s2, cfm_barco_guardado
-
-    sll  $t3, $t2, 4                # (cy_local * 16) + cx
+    sll  $t3, $t2, 4
     add  $t3, $t3, $t1
     add  $t3, $s0, $t3
     li   $t4, CELDA_BARCO
-    sb   $t4, 0($t3)                # Marcar casilla como ocupada (1)
-
+    sb   $t4, 0($t3)
     beqz $s5, cfm_w_h
     addi $t2, $t2, 1
     j    cfm_w_next
@@ -187,7 +180,6 @@ cfm_barco_guardado:
     li   $v0, 4
     la   $a0, msg_ok_barco
     syscall
-
     addi $s1, $s1, 1
     j    cfm_loop_barcos
 

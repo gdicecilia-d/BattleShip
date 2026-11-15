@@ -54,7 +54,7 @@ main:
     li   $v0, 10                    # Terminar ejecucion
     syscall
 
-# 3. Submodulos del proyecto (incluidos DESPUÉS del main)
+# 3. Submodulos del proyecto (incluidos despues del main)
 .include "vista/display_buffer.asm"
 .include "modelo/tableros.asm"
 .include "modelo/flota.asm"

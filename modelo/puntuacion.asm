@@ -1,4 +1,4 @@
-# Sistema de Puntuación, Turnos y Estado Global (Integrante 3)
+# Sistema de Puntuación, Turnos y Estado Global 
 
 .data
 .globl puntos_j1

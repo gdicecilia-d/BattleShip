@@ -18,14 +18,14 @@ ejecutar_demo_ataque:
     la   $a0, msg_fase_atk
     syscall
 
-    li   $s0, 1                     # Cursor X inicial
-    li   $s1, 1                     # Cursor Y inicial
+    li   $s0, 1
+    li   $s1, 1
 
 eda_bucle:
     la   $a0, tablero_enemigo
     la   $a1, tablero_ataque
     jal  intentar_comodin_radar
-    move $s2, $v1                   # Guardar indice revelado (-1 si inactivo)
+    move $s2, $v1
 
     move $a0, $s0
     move $a1, $s1
@@ -51,7 +51,7 @@ eda_bucle:
 eda_fin_turno:
     la   $a0, tablero_ataque
     li   $a1, Y_ATK_MIN
-    li   $a2, -1                    # Ocultar pista temporal del radar
+    li   $a2, -1
     jal  dibujar_tablero_base
 
     la   $a0, tablero_enemigo
@@ -62,7 +62,6 @@ eda_fin_turno:
     la   $a0, msg_victoria
     syscall
 
-    # Pausa para ver el tablero final
     li   $v0, 4
     la   $a0, msg_pausa_fin
     syscall
@@ -77,6 +76,7 @@ eda_fin_turno:
 
 
 # procesar_disparo_simple($a0=X, $a1=Y, $a2=tablero_enemigo, $a3=tablero_ataque)
+# Retorna: $v1 = 0 (fallo/duplicado/borde), 1 (impacto simple), 2 (impacto que hundio)
 procesar_disparo_simple:
     addi $sp, $sp, -20
     sw   $ra, 16($sp)
@@ -89,6 +89,8 @@ procesar_disparo_simple:
     move $s1, $a1
     move $s2, $a2
     move $s3, $a3
+
+    li   $v1, 0                     # Por defecto: fallo
 
     # Validar bordes
     blez $s0, pds_borde_error
@@ -108,6 +110,8 @@ procesar_disparo_simple:
     lbu  $t4, 0($t3)
     li   $t5, CELDA_BARCO
     beq  $t4, $t5, pds_impacto
+    li   $t5, CELDA_HUNDIDO
+    beq  $t4, $t5, pds_duplicado    # Ya estaba hundido, tratar como duplicado
 
     # Fallo (Agua)
     li   $t5, CELDA_FALLO
@@ -121,6 +125,7 @@ procesar_disparo_simple:
     li   $v0, 4
     la   $a0, msg_tiro_miss
     syscall
+    li   $v1, 0
     j    pds_coord
 
 pds_impacto:
@@ -141,9 +146,9 @@ pds_impacto:
     move $a1, $s1
     move $a2, $s2
     jal  verificar_hundimiento
-    beqz $v0, pds_coord             # Si no se hundió, salta
-    
-    # Si llegó aquí, se hundió. Pintar todo el barco de gris.
+    beqz $v0, pds_hit_simple
+
+    # Hundido
     li   $v0, 4
     la   $a0, msg_hundido
     syscall
@@ -152,19 +157,11 @@ pds_impacto:
     move $a2, $s2
     move $a3, $s3
     jal  marcar_hundido
-
+    li   $v1, 2
     j    pds_coord
 
-pds_borde_error:
-    li   $v0, 4
-    la   $a0, msg_err_borde
-    syscall
-    j    pds_fin
-
-pds_duplicado:
-    li   $v0, 4
-    la   $a0, msg_tiro_dup
-    syscall
+pds_hit_simple:
+    li   $v1, 1
 
 pds_coord:
     move $a0, $s0
@@ -182,6 +179,20 @@ pds_fin:
     lw   $ra, 16($sp)
     addi $sp, $sp, 20
     jr   $ra
+
+pds_borde_error:
+    li   $v0, 4
+    la   $a0, msg_err_borde
+    syscall
+    li   $v1, 0
+    j    pds_fin
+
+pds_duplicado:
+    li   $v0, 4
+    la   $a0, msg_tiro_dup
+    syscall
+    li   $v1, 0
+    j    pds_fin
 
 
 # verificar_hundimiento($a0=X, $a1=Y, $a2=tablero_enemigo) -> $v0 = 1 si hundido, 0 si no
@@ -260,7 +271,6 @@ vh_no_hundido:
 
 
 # marcar_hundido($a0=X, $a1=Y, $a2=tablero_enemigo, $a3=tablero_ataque)
-# Función recursiva que pinta todo el barco de gris
 marcar_hundido:
     addi $sp, $sp, -20
     sw   $ra, 16($sp)
@@ -269,41 +279,35 @@ marcar_hundido:
     sw   $s1, 4($sp)
     sw   $s0, 0($sp)
 
-    move $s0, $a0                   # X
-    move $s1, $a1                   # Y
-    move $s2, $a2                   # tablero_enemigo
-    move $s3, $a3                   # tablero_ataque
+    move $s0, $a0
+    move $s1, $a1
+    move $s2, $a2
+    move $s3, $a3
 
-    # Verificar límites
     bltz $s0, mh_fin
     li   $t0, 15
     bgt  $s0, $t0, mh_fin
     bltz $s1, mh_fin
     bgt  $s1, $t0, mh_fin
 
-    # Calcular índice
     sll  $t1, $s1, 4
     add  $t1, $t1, $s0
     add  $t2, $s2, $t1
     lbu  $t3, 0($t2)
     
-    # Solo pintar si la casilla es un IMPACTO (evita pintar agua)
     li   $t4, CELDA_IMPACTO
     bne  $t3, $t4, mh_fin
 
-    # Cambiar estado a HUNDIDO en ambos tableros
     li   $t4, CELDA_HUNDIDO
     sb   $t4, 0($t2)
     add  $t5, $s3, $t1
     sb   $t4, 0($t5)
 
-    # Pintar de gris
     move $a0, $s0
     move $a1, $s1
     li   $a2, COLOR_HUNDIDO
     jal  dibujar_celda
 
-    # Llamadas recursivas (Arriba, Abajo, Izquierda, Derecha)
     move $a0, $s0
     addi $a1, $s1, -1
     move $a2, $s2

@@ -1,10 +1,11 @@
-# Inteligencia Artificial de la CPU (Integrante 3)
+# Inteligencia Artificial de la CPU 
 
 .data
-cpu_estado:      .word 0  # 0 = Buscando, 1 = Cazando
-cpu_ultimo_x:    .word -1
-cpu_ultimo_y:    .word -1
-cpu_dir_intento: .word 0  # 0=Arriba, 1=Abajo, 2=Izq, 3=Der
+cpu_estado:      .word 0  # 0 = Buscando, 1 = Arriba, 2 = Abajo, 3 = Izq, 4 = Der
+cpu_origen_x:    .word -1 # Coordenada X del primer impacto
+cpu_origen_y:    .word -1 # Coordenada Y del primer impacto
+cpu_ultimo_x:    .word -1 # Coordenada X del último impacto
+cpu_ultimo_y:    .word -1 # Coordenada Y del último impacto
 
 .text
 .globl colocar_flota_cpu
@@ -122,43 +123,18 @@ turno_cpu:
     la   $s0, tablero_defensa       # Tablero del jugador
 
     lw   $t0, cpu_estado
-    bnez $t0, cpu_cazar             # Si está cazando, ir a lógica de caza
+    beqz $t0, cpu_buscar_rand       # Si está en 0, buscar al azar
 
-cpu_buscar_rand:
-    li   $v0, 42
-    li   $a0, 1
-    li   $a1, 14
-    syscall
-    move $s1, $a0                   # X
-
-    li   $v0, 42
-    li   $a0, 1
-    li   $a1, 14
-    syscall
-    move $s2, $a0                   # Y
-    
-    sll  $t1, $s2, 4
-    add  $t1, $t1, $s1
-    add  $t2, $s0, $t1
-    lbu  $t3, 0($t2)
-    li   $t4, CELDA_IMPACTO
-    beq  $t3, $t4, cpu_buscar_rand
-    li   $t4, CELDA_FALLO
-    beq  $t3, $t4, cpu_buscar_rand
-    li   $t4, CELDA_HUNDIDO
-    beq  $t3, $t4, cpu_buscar_rand
-
-    j    cpu_ejecutar_disparo
-
-cpu_cazar:
+    # Lógica de caza
     lw   $s1, cpu_ultimo_x
     lw   $s2, cpu_ultimo_y
-    lw   $t0, cpu_dir_intento
+    lw   $t0, cpu_estado
 
-    beqz $t0, c_d_up
     li   $t1, 1
-    beq  $t0, $t1, c_d_down
+    beq  $t0, $t1, c_d_up
     li   $t1, 2
+    beq  $t0, $t1, c_d_down
+    li   $t1, 3
     beq  $t0, $t1, c_d_left
     j    c_d_right
 
@@ -175,42 +151,74 @@ c_d_right:
     addi $s1, $s1, 1
 
 c_d_validar:
-    bltz $s1, c_d_cambiar_dir
-    bgt  $s1, 15, c_d_cambiar_dir
-    bltz $s2, c_d_cambiar_dir
-    bgt  $s2, 15, c_d_cambiar_dir
+    # Verificar límites (1 a 14)
+    li   $t1, 1
+    blt  $s1, $t1, c_d_siguiente_dir
+    li   $t1, 14
+    bgt  $s1, $t1, c_d_siguiente_dir
+    li   $t1, 1
+    blt  $s2, $t1, c_d_siguiente_dir
+    li   $t1, 14
+    bgt  $s2, $t1, c_d_siguiente_dir
 
+    # Verificar si ya se disparó ahí
     sll  $t1, $s2, 4
     add  $t1, $t1, $s1
     add  $t2, $s0, $t1
     lbu  $t3, 0($t2)
     li   $t4, CELDA_IMPACTO
-    beq  $t3, $t4, c_d_cambiar_dir
+    beq  $t3, $t4, c_d_siguiente_dir
     li   $t4, CELDA_FALLO
-    beq  $t3, $t4, c_d_cambiar_dir
+    beq  $t3, $t4, c_d_siguiente_dir
     li   $t4, CELDA_HUNDIDO
-    beq  $t3, $t4, c_d_cambiar_dir
-
-    # --- CORRECCIÓN: Avanzar la dirección antes de disparar ---
-    # Si falla, en su próximo turno probará la siguiente dirección
-    lw   $t0, cpu_dir_intento
-    addi $t0, $t0, 1
-    sw   $t0, cpu_dir_intento
-    # -----------------------------------------------------------
+    beq  $t3, $t4, c_d_siguiente_dir
 
     j    cpu_ejecutar_disparo
 
-c_d_cambiar_dir:
-    lw   $t0, cpu_dir_intento
+c_d_siguiente_dir:
+    lw   $t0, cpu_estado
     addi $t0, $t0, 1
-    sw   $t0, cpu_dir_intento
-    li   $t1, 4
+    sw   $t0, cpu_estado
+    li   $t1, 5
     bge  $t0, $t1, c_d_reset_estado
-    j    cpu_cazar
+    
+    # Restaurar al origen
+    lw   $t1, cpu_origen_x
+    lw   $t2, cpu_origen_y
+    sw   $t1, cpu_ultimo_x
+    sw   $t2, cpu_ultimo_y
+    
+    j    turno_cpu   # Volver a intentar con la nueva dirección
 
 c_d_reset_estado:
     sw   $zero, cpu_estado
     j    cpu_buscar_rand
+
+cpu_buscar_rand:
+    li   $v0, 42
+    li   $a0, 1
+    li   $a1, 15                    # Genera 1 a 14
+    syscall
+    move $s1, $a0                   # X
+
+    li   $v0, 42
+    li   $a0, 1
+    li   $a1, 15                    # Genera 1 a 14
+    syscall
+    move $s2, $a0                   # Y
+    
+    sll  $t1, $s2, 4
+    add  $t1, $t1, $s1
+    add  $t2, $s0, $t1
+    lbu  $t3, 0($t2)
+    li   $t4, CELDA_IMPACTO
+    beq  $t3, $t4, cpu_buscar_rand
+    li   $t4, CELDA_FALLO
+    beq  $t3, $t4, cpu_buscar_rand
+    li   $t4, CELDA_HUNDIDO
+    beq  $t3, $t4, cpu_buscar_rand
+
+    j    cpu_ejecutar_disparo
 
 cpu_ejecutar_disparo:
     sll  $t1, $s2, 4
@@ -220,10 +228,11 @@ cpu_ejecutar_disparo:
     li   $t4, CELDA_BARCO
     beq  $t3, $t4, cpu_hit
 
+    # fallo
     li   $t4, CELDA_FALLO
     sb   $t4, 0($t2)
     move $a0, $s1
-    move $a1, $s2
+    addi $a1, $s2, 16               # +16 para tablero de defensa
     li   $a2, COLOR_FALLO
     jal  dibujar_celda
 
@@ -231,20 +240,40 @@ cpu_ejecutar_disparo:
     la   $a0, msg_tiro_miss
     syscall
     move $a0, $s1
-    move $a1, $s2
+    addi $a1, $s2, 16
     jal  imprimir_coordenadas
     li   $v0, 4
     la   $a0, msg_cierre_par
     syscall
     
+    lw   $t0, cpu_estado
+    beqz $t0, cpu_miss_fin          # Si estaba buscando, sigue buscando
+
+    # Estaba cazando, así que cambiamos de dirección y reseteamos al origen
+    addi $t0, $t0, 1
+    sw   $t0, cpu_estado
+    li   $t1, 5
+    bge  $t0, $t1, cpu_miss_reset
+
+    lw   $t1, cpu_origen_x
+    lw   $t2, cpu_origen_y
+    sw   $t1, cpu_ultimo_x
+    sw   $t2, cpu_ultimo_y
+    j    cpu_miss_fin
+
+cpu_miss_reset:
+    sw   $zero, cpu_estado
+
+cpu_miss_fin:
     li   $v0, 0
     j    cpu_fin
 
 cpu_hit:
+    # impacto
     li   $t4, CELDA_IMPACTO
     sb   $t4, 0($t2)
     move $a0, $s1
-    move $a1, $s2
+    addi $a1, $s2, 16
     li   $a2, COLOR_IMPACTO
     jal  dibujar_celda
 
@@ -252,24 +281,34 @@ cpu_hit:
     la   $a0, msg_tiro_hit
     syscall
     move $a0, $s1
-    move $a1, $s2
+    addi $a1, $s2, 16
     jal  imprimir_coordenadas
     li   $v0, 4
     la   $a0, msg_cierre_par
     syscall
 
-    li   $t0, 1
-    sw   $t0, cpu_estado
+    # Actualizar la posición actual
     sw   $s1, cpu_ultimo_x
     sw   $s2, cpu_ultimo_y
-    sw   $zero, cpu_dir_intento
 
+    # Si estábamos buscando, iniciamos caza
+    lw   $t0, cpu_estado
+    bnez $t0, cpu_hit_ya_cazando
+    
+    # Nuevo origen
+    sw   $s1, cpu_origen_x
+    sw   $s2, cpu_origen_y
+    li   $t0, 1
+    sw   $t0, cpu_estado
+
+cpu_hit_ya_cazando:
     move $a0, $s1
     move $a1, $s2
     move $a2, $s0
     jal  verificar_hundimiento
     beqz $v0, cpu_fin_hit
 
+    # Se hundió
     sw   $zero, cpu_estado
     li   $v0, 4
     la   $a0, msg_hundido
@@ -277,7 +316,7 @@ cpu_hit:
     move $a0, $s1
     move $a1, $s2
     move $a2, $s0
-    la   $a3, tablero_ataque
+    move $a3, $s0                   # Usar defensa para pintar el gris
     jal  marcar_hundido
 
 cpu_fin_hit:

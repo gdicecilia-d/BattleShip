@@ -66,7 +66,7 @@ dtb_loop:
     beq  $t2, $t3, dtb_es_impacto
     li   $t3, CELDA_FALLO           
     beq  $t2, $t3, dtb_es_fallo
-    li   $t3, CELDA_HUNDIDO         # NUEVO: Detectar Hundido
+    li   $t3, CELDA_HUNDIDO         # Detectar Hundido
     beq  $t2, $t3, dtb_es_hundido
 
     bne  $s3, $s2, dtb_agua_olas

@@ -173,7 +173,7 @@ ica_ya_hit:
     sb   $t7, 0($t8)
 
 ica_draw_hit:
-    # GUARDAMOS X e Y ANTES de dibujar, porque dibujar_celda sobrescribe $t1
+    # Guardar X e Y antes de dibujar, porque dibujar_celda sobrescribe $t1
     move $t8, $t3                   
     move $t9, $t1                   
     

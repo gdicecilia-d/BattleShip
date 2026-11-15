@@ -46,7 +46,7 @@ mc_abajo:
     j    mc_fin
 
 mc_izquierda:
-    li   $t4, 1                     # NUEVO: X_min = 1 (no puede ser 0)
+    li   $t4, 1                     # X_min = 1 (no puede ser 0)
     ble  $v0, $t4, mc_fin
     addi $v0, $v0, -1
     j    mc_fin
