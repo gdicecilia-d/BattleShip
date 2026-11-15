@@ -1,36 +1,46 @@
-# BattleShip (Batalla Naval) — MIPS R2000 (MARS 4.5)
+# 🚢 BattleShip: Batalla Naval en MIPS
 
-## 1. Estructura del Proyecto
+Proyecto Final - Organización del Computador  
+Universidad Metropolitana 
 
-- [`main.asm`](main.asm) — Archivo principal que enlaza e inicia todo el programa.
-- [`config/constantes.asm`](config/constantes.asm) — Constantes de colores, dimensiones, límites y teclas ASCII.
-- **`modelo/`** — Tableros lógicos y validaciones:
-  - [`modelo/tableros.asm`](modelo/tableros.asm) — `tablero_defensa`, `tablero_ataque`, `tablero_enemigo` (`256` bytes c/u).
-  - [`modelo/flota.asm`](modelo/flota.asm) — Longitudes `(5, 4, 3, 2)` y nombres de los 4 barcos.
-  - [`modelo/tableros_ops.asm`](modelo/tableros_ops.asm) — Limpieza de matrices, carga inicial de flota enemiga y conteo de casillas restantes.
-  - [`modelo/validacion_flota.asm`](modelo/validacion_flota.asm) — `validar_posicion_barco` (límites y colisiones).
-- **`vista/`** — Buffer de video y salida por consola:
-  - [`vista/display_buffer.asm`](vista/display_buffer.asm) — `display_buffer: .space 2048` en `0x10010000` (primera directiva en `.data`).
-  - [`vista/mensajes.asm`](vista/mensajes.asm) — Cadenas de texto en consola.
-  - [`vista/render_tablero.asm`](vista/render_tablero.asm) — `dibujar_celda`, `dibujar_tablero_base`, `dibujar_preview_barco`, `limpiar_pantalla_agua`, `imprimir_coordenadas`.
-- **`controlador/`** — Controles, colocación de flota y comodines:
-  - [`controlador/teclado.asm`](controlador/teclado.asm) — `leer_tecla` (`syscall 12`).
-  - [`controlador/cursor.asm`](controlador/cursor.asm) — `mover_cursor` y `mover_cursor_ataque`.
-  - [`controlador/colocacion_flota.asm`](controlador/colocacion_flota.asm) — `colocar_flota_manual`.
-  - [`controlador/comodines.asm`](controlador/comodines.asm) — `intentar_comodin_radar`, `intentar_comodin_area`, `ejecutar_comodin`.
-  - [`controlador/combate_demo.asm`](controlador/combate_demo.asm) — `procesar_disparo_simple` y `ejecutar_demo_ataque`.
+## 📖 Descripción
 
-## 2. Cómo ejecutar en MARS 4.5
+Este es un clásico juego de Batalla Naval programado completamente en ensamblador MIPS R2000 y ejecutado en el simulador MARS 4.5. El juego utiliza la herramienta Bitmap Display para mostrar una interfaz gráfica dividida en dos tableros (ataque y defensa). Incluye lógica de turnos, una inteligencia artificial para la CPU, comodines aleatorios y un sistema de puntuación.
 
-1. Abre [`main.asm`](main.asm) en MARS y presiona **F3** para ensamblar.
-2. **Antes de darle a Run (F5)**, abre `Tools -> Bitmap Display`, configura:
-   - **Unit Width / Height in Pixels:** `16`
-   - **Display Width / Height in Pixels:** `256 x 512`
-   - **Base address for display:** `0x10010000 (static data)`
-   y pulsa **"Connect to MIPS"**.
-3. Presiona **F5** y haz clic en la pestaña **Run I/O** para enviar las teclas.
+## ✨ Características principales
 
-## 3. Controles
-- `W` / `A` / `S` / `D`: Mover cursor
-- `R`: Rotar orientación (`Horizontal` / `Vertical`) durante la colocación
-- `E` o `Enter`: Confirmar colocación o disparo
+- 🌊 Interfaz gráfica con efecto de olas, bordes de arena y cursor parpadeante.
+- 🤖 Dos modos de juego: Jugador contra Jugador (PvP) y Jugador contra CPU (PvCPU).
+- 🧠 La CPU genera disparos aleatorios y utiliza una estrategia de caza: al impactar un barco, rastrea la dirección para hundirlo.
+- 🃏 Comodines: Radar (5% de probabilidad de revelar un barco enemigo) y Ataque en Área (1 de 7 probabilidades de bombardear un cuadrado de 3x3).
+- 🎯 Detección de hundimiento: cuando un barco entero es destruido, se pinta de color gris.
+- 🏆 Sistema de puntuación: +1 punto por impacto, +5 puntos por barco hundido.
+- 🛡️ Validación estricta: no se pueden colocar barcos sobre otros, fuera de los límites ni en las zonas de arena. Tampoco se puede disparar dos veces a la misma casilla.
+
+## 🛠️ Requisitos y configuración en MARS
+
+Para ejecutar el juego, necesitas tener instalado Java y MARS 4.5.
+
+1. Abre el archivo main.asm en MARS.
+2. Ve al menú Settings y asegúrate de tener desmarcada la opción "Assemble all files in directory".
+3. Presiona F3 (Ensamblar). Si no hay errores, ve a Tools y abre Bitmap Display con esta configuración:
+   - Unit Width in Pixels: 16
+   - Unit Height in Pixels: 16
+   - Display Width in Pixels: 256
+   - Display Height in Pixels: 512
+   - Base address for display: 0x10010000 (static data)
+   - Haz clic en "Connect to MIPS".
+4. Presiona F5 (Ejecutar).
+5. Ve a la pestaña Run I/O en la parte inferior de MARS para ingresar las teclas y ver los mensajes.
+
+## 🎮 Controles
+
+- W / A / S / D: mover el cursor (arriba, izquierda, abajo, derecha).
+- R: rotar el barco (horizontal / vertical) solo en la fase de colocación.
+- E o Enter: confirmar la posición del barco o disparar.
+
+## 👥 Autores
+
+- Gianfranco Camporeale
+- Juan Coll
+- Grazia Di Cecilia
