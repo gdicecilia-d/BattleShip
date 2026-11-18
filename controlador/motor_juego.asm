@@ -89,15 +89,27 @@ jb_turno_j2_o_cpu:
     li   $t1, 1
     beq  $t0, $t1, jb_turno_j2_pvp
 
-    # --- Turno CPU ---
+    # Turno CPU 
     li   $v0, 4
     la   $a0, msg_turno_cpu
     syscall
     jal  turno_cpu
     move $s0, $v0
     beqz $s0, jb_cpu_fallo
+
+    li   $t0, 2
+    beq  $s0, $t0, jb_cpu_hundido
+
+    # Impacto simple: +1 punto
     li   $a0, 2
     li   $a1, 1
+    jal  sumar_puntos
+    j    jb_cpu_eval_fin
+
+jb_cpu_hundido:
+    # Impacto que hundió: +6 puntos (1 impacto + 5 bonus)
+    li   $a0, 2
+    li   $a1, 6
     jal  sumar_puntos
     j    jb_cpu_eval_fin
 

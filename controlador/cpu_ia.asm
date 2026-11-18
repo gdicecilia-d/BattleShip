@@ -11,16 +11,21 @@ cpu_ultimo_y:    .word -1 # Coordenada Y del último impacto
 .globl colocar_flota_cpu
 .globl turno_cpu
 
+# Coloca la flota de la CPU en tablero_enemigo respetando la regla de no-contacto
+# (delega la validacion a validar_posicion_barco, igual que el jugador humano)
 colocar_flota_cpu:
-    addi $sp, $sp, -12
-    sw   $ra, 8($sp)
+    addi $sp, $sp, -24
+    sw   $ra, 20($sp)
+    sw   $s4, 16($sp)
+    sw   $s3, 12($sp)
+    sw   $s2, 8($sp)
     sw   $s1, 4($sp)
     sw   $s0, 0($sp)
 
     la   $a0, tablero_enemigo
     jal  limpiar_matriz_256
 
-    li   $s0, 0                     # Índice de barco (0..3)
+    li   $s0, 0                     # Indice de barco (0..3)
 
 cfc_loop_barcos:
     li   $t0, 4
@@ -36,64 +41,42 @@ cfc_reintentar:
     li   $a0, 0
     li   $a1, 14
     syscall
-    addi $t2, $a0, 1                # X en $t2
+    addi $s2, $a0, 1                # X = 1..14
 
     li   $v0, 42
     li   $a0, 0
     li   $a1, 14
     syscall
-    addi $t3, $a0, 1                # Y en $t3
+    addi $s3, $a0, 1                # Y_local = 1..14
 
     li   $v0, 42
     li   $a0, 0
     li   $a1, 2
     syscall
-    move $t4, $a0                   # Orientación en $t4
+    move $s4, $a0                   # Orientacion (0 horiz, 1 vert)
 
-    beqz $t4, cfc_val_h
-    add  $t5, $t3, $s1
-    li   $t6, 15
-    bgt  $t5, $t6, cfc_reintentar
-    j    cfc_ver_colision
+    # Validar con la misma funcion que usa el jugador (incluye 3x3)
+    move $a0, $s2
+    addi $a1, $s3, 16               # Y_screen = Y_local + 16
+    move $a2, $s1
+    move $a3, $s4
+    la   $t9, tablero_enemigo
+    jal  validar_posicion_barco
+    beqz $v0, cfc_reintentar        # Si no es valido, reintentar
 
-cfc_val_h:
-    add  $t5, $t2, $s1
-    li   $t6, 15
-    bgt  $t5, $t6, cfc_reintentar
-
-cfc_ver_colision:
+    # Colocar el barco en el tablero (usa $s2, $s3, $s4, $s1)
     li   $t5, 0
     la   $t6, tablero_enemigo
-cfc_col_loop:
-    bge  $t5, $s1, cfc_col_ok
-    beqz $t4, cfc_col_h
-    add  $t7, $t3, $t5
-    sll  $t7, $t7, 4
-    add  $t7, $t7, $t2
-    j    cfc_col_check
-cfc_col_h:
-    sll  $t7, $t3, 4
-    add  $t7, $t7, $t2
-    add  $t7, $t7, $t5
-cfc_col_check:
-    add  $t7, $t6, $t7
-    lbu  $t8, 0($t7)
-    bnez $t8, cfc_reintentar
-    addi $t5, $t5, 1
-    j    cfc_col_loop
-
-cfc_col_ok:
-    li   $t5, 0
 cfc_place_loop:
     bge  $t5, $s1, cfc_next_barco
-    beqz $t4, cfc_place_h
-    add  $t7, $t3, $t5
+    beqz $s4, cfc_place_h
+    add  $t7, $s3, $t5
     sll  $t7, $t7, 4
-    add  $t7, $t7, $t2
+    add  $t7, $t7, $s2
     j    cfc_place_do
 cfc_place_h:
-    sll  $t7, $t3, 4
-    add  $t7, $t7, $t2
+    sll  $t7, $s3, 4
+    add  $t7, $t7, $s2
     add  $t7, $t7, $t5
 cfc_place_do:
     add  $t7, $t6, $t7
@@ -109,9 +92,13 @@ cfc_next_barco:
 cfc_fin:
     lw   $s0, 0($sp)
     lw   $s1, 4($sp)
-    lw   $ra, 8($sp)
-    addi $sp, $sp, 12
+    lw   $s2, 8($sp)
+    lw   $s3, 12($sp)
+    lw   $s4, 16($sp)
+    lw   $ra, 20($sp)
+    addi $sp, $sp, 24
     jr   $ra
+
 
 turno_cpu:
     addi $sp, $sp, -16
@@ -123,9 +110,9 @@ turno_cpu:
     la   $s0, tablero_defensa       # Tablero del jugador
 
     lw   $t0, cpu_estado
-    beqz $t0, cpu_buscar_rand       # Si está en 0, buscar al azar
+    beqz $t0, cpu_buscar_rand       # Si esta en 0, buscar al azar
 
-    # Lógica de caza
+    # Logica de caza
     lw   $s1, cpu_ultimo_x
     lw   $s2, cpu_ultimo_y
     lw   $t0, cpu_estado
@@ -151,7 +138,7 @@ c_d_right:
     addi $s1, $s1, 1
 
 c_d_validar:
-    # Verificar límites (1 a 14)
+    # Verificar limites (1 a 14)
     li   $t1, 1
     blt  $s1, $t1, c_d_siguiente_dir
     li   $t1, 14
@@ -161,7 +148,7 @@ c_d_validar:
     li   $t1, 14
     bgt  $s2, $t1, c_d_siguiente_dir
 
-    # Verificar si ya se disparó ahí
+    # Verificar si ya se disparo ahi
     sll  $t1, $s2, 4
     add  $t1, $t1, $s1
     add  $t2, $s0, $t1
@@ -181,14 +168,14 @@ c_d_siguiente_dir:
     sw   $t0, cpu_estado
     li   $t1, 5
     bge  $t0, $t1, c_d_reset_estado
-    
+
     # Restaurar al origen
     lw   $t1, cpu_origen_x
     lw   $t2, cpu_origen_y
     sw   $t1, cpu_ultimo_x
     sw   $t2, cpu_ultimo_y
-    
-    j    turno_cpu   # Volver a intentar con la nueva dirección
+
+    j    turno_cpu   # Volver a intentar con la nueva direccion
 
 c_d_reset_estado:
     sw   $zero, cpu_estado
@@ -206,7 +193,7 @@ cpu_buscar_rand:
     li   $a1, 15                    # Genera 1 a 14
     syscall
     move $s2, $a0                   # Y
-    
+
     sll  $t1, $s2, 4
     add  $t1, $t1, $s1
     add  $t2, $s0, $t1
@@ -245,11 +232,11 @@ cpu_ejecutar_disparo:
     li   $v0, 4
     la   $a0, msg_cierre_par
     syscall
-    
+
     lw   $t0, cpu_estado
     beqz $t0, cpu_miss_fin          # Si estaba buscando, sigue buscando
 
-    # Estaba cazando, así que cambiamos de dirección y reseteamos al origen
+    # Estaba cazando, asi que cambiamos de direccion y reseteamos al origen
     addi $t0, $t0, 1
     sw   $t0, cpu_estado
     li   $t1, 5
@@ -287,14 +274,14 @@ cpu_hit:
     la   $a0, msg_cierre_par
     syscall
 
-    # Actualizar la posición actual
+    # Actualizar la posicion actual
     sw   $s1, cpu_ultimo_x
     sw   $s2, cpu_ultimo_y
 
-    # Si estábamos buscando, iniciamos caza
+    # Si estabamos buscando, iniciamos caza
     lw   $t0, cpu_estado
     bnez $t0, cpu_hit_ya_cazando
-    
+
     # Nuevo origen
     sw   $s1, cpu_origen_x
     sw   $s2, cpu_origen_y
@@ -306,9 +293,9 @@ cpu_hit_ya_cazando:
     move $a1, $s2
     move $a2, $s0
     jal  verificar_hundimiento
-    beqz $v0, cpu_fin_hit
+    beqz $v0, cpu_hit_simple
 
-    # Se hundió
+    # Se hundio
     sw   $zero, cpu_estado
     li   $v0, 4
     la   $a0, msg_hundido
@@ -316,11 +303,15 @@ cpu_hit_ya_cazando:
     move $a0, $s1
     move $a1, $s2
     move $a2, $s0
-    move $a3, $s0                   # Usar defensa para pintar el gris
+    move $a3, $s0
     jal  marcar_hundido
 
-cpu_fin_hit:
-    li   $v0, 1
+    li   $v0, 2                     # 2 = impacto que hundio
+    j    cpu_fin
+
+cpu_hit_simple:
+    li   $v0, 1                     # 1 = impacto simple
+
 cpu_fin:
     lw   $s0, 0($sp)
     lw   $s1, 4($sp)

@@ -15,7 +15,7 @@ msg_orient_h:       .asciiz ") | Orient=Horizontal | Tecla> "
 msg_orient_v:       .asciiz ") | Orient=Vertical   | Tecla> "
 msg_ok_barco:       .asciiz "\nBarco colocado correctamente.\n"
 msg_err_limites:    .asciiz "\n[ERROR] Posicion invalida: el barco excede los limites del tablero.\n"
-msg_err_colision:   .asciiz "\n[ERROR] Colision detectada: ya hay otro barco en esas casillas.\n"
+msg_err_colision:   .asciiz "\n[ERROR] Colision detectada: ya hay otro barco adyacente a esa casilla.\n"
 msg_flota_lista:    .asciiz "\nFlota desplegada correctamente.\n"
 
 msg_fase_atk:       .asciiz "\nFASE 2: ATAQUE\nControles: W/A/S/D mover | E o Enter disparar\n"
